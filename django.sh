@@ -5,6 +5,7 @@ cd backend
 
 printf "\033[33mDo you want to run server(run)\nTo make migrations(make)\nTo apply migrations(migrate)\nto generate static files(static)\nto create new app(app) \033[0m"
 read -r django_command
+ls
 if [ "$django_command" = "run" ]; then
     python manage.py runserver 0.0.0.0:8000
 elif [ "$django_command" = "make" ]; then
