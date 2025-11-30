@@ -1,3 +1,4 @@
+// AppSidebar.tsx (updated with collapsible support)
 import { Home, Users, FileText, Receipt, Package, BarChart3, Settings, LogOut, Zap } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -22,9 +23,9 @@ const menuItems = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
-export function AppSidebar() {
+export function AppSidebar() { // No props needed; uses provider state
   return (
-    <Sidebar className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border"> {/* Add collapsible="icon" here for icon-only collapse */}
       <SidebarHeader className="border-b border-sidebar-border p-6">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-sidebar-primary flex items-center justify-center">
@@ -46,11 +47,11 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      className="flex items-center gap-3 px-4 py-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors rounded-lg"
+                      className="flex items-center gap-3 px-4 py-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors rounded-lg data-[state=open]:justify-start data-[state=closed]:justify-center"
                       activeClassName="bg-sidebar-accent text-sidebar-foreground font-medium"
                     >
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.title}</span>
+                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      <span className="truncate">{item.title}</span> {/* Text auto-hides in collapsed mode via shadcn styles */}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -66,10 +67,10 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild>
                   <NavLink
                     to="/login"
-                    className="flex items-center gap-3 px-4 py-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors rounded-lg"
+                    className="flex items-center gap-3 px-4 py-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors rounded-lg data-[state=open]:justify-start data-[state=closed]:justify-center"
                   >
-                    <LogOut className="h-5 w-5" />
-                    <span>Logout</span>
+                    <LogOut className="h-5 w-5 flex-shrink-0" />
+                    <span className="truncate">Logout</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

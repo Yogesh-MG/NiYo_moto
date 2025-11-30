@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import {
@@ -17,33 +17,88 @@ import {
 } from "@/components/ui/select";
 import api from "@/utils/api";
 
-interface QuotationItem {
+interface InvoiceItem {
   sl_no: number;
   description: string;
-  price: number;
+  quantity: number;
+  rate: number;
+  price: number; // This acts as the Total Amount (Qty * Rate)
 }
 
-const QuotationCreate = () => {
+const InvoiceCreate = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState<QuotationItem[]>([
-    { sl_no: 1, description: "", price: 0 },
+  // Initialize with quantity 1 and rate 0
+  const [items, setItems] = useState<InvoiceItem[]>([
+    { sl_no: 1, description: "", quantity: 1, rate: 0, price: 0 },
   ]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [quotations, setQuotations] = useState<any[]>([]); // State for quotations list
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [selectedQuotationId, setSelectedQuotationId] = useState<string>(""); // State for selected quotation
   
   const [gstApplied, setGstApplied] = useState(false);
   const [gstRate, setGstRate] = useState(18);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Fetch customers for the dropdown
+    // Fetch customers
     api.get("/api/customer/")
         .then(res => setCustomers(res.data))
         .catch(err => console.error("Error fetching customers", err));
+
+    // Fetch quotations for the "Copy from" dropdown
+    api.get("/api/quotations/")
+        .then(res => setQuotations(res.data))
+        .catch(err => console.error("Error fetching quotations", err));
   }, []);
 
+  const handleQuotationSelect = async (quoteId: string) => {
+    setSelectedQuotationId(quoteId);
+    if (!quoteId) return;
+
+    try {
+        const loadingToast = toast.loading("Fetching quotation details...");
+        const res = await api.get(`/api/quotations/${quoteId}/`);
+        const quoteData = res.data;
+        
+        toast.dismiss(loadingToast);
+        toast.success("Data loaded from Quotation!");
+
+        // 1. Set Customer
+        if (quoteData.customer) {
+            setSelectedCustomerId(quoteData.customer.toString());
+        }
+
+        // 2. Map Items (Quotation Price -> Invoice Rate)
+        if (quoteData.items && quoteData.items.length > 0) {
+            const mappedItems: InvoiceItem[] = quoteData.items.map((qItem: any, index: number) => ({
+                sl_no: index + 1,
+                description: qItem.description,
+                quantity: 1, // Default to 1
+                rate: parseFloat(qItem.price), // Use Quotation price as Rate
+                price: parseFloat(qItem.price) // 1 * Rate
+            }));
+            setItems(mappedItems);
+        }
+
+        // 3. Set GST & Notes
+        setGstApplied(quoteData.gst_applied);
+        setGstRate(parseFloat(quoteData.gst_rate) || 18);
+        
+        // Append to notes or overwrite? Let's append if user already typed something, else overwrite
+        const noteField = document.getElementById("notes") as HTMLTextAreaElement;
+        if (noteField) {
+            noteField.value = quoteData.notes || "";
+        }
+
+    } catch (error) {
+        console.error("Error fetching quotation details", error);
+        toast.error("Failed to fetch quotation data");
+    }
+  };
+
   const addItem = () => {
-    setItems([...items, { sl_no: items.length + 1, description: "", price: 0 }]);
+    setItems([...items, { sl_no: items.length + 1, description: "", quantity: 1, rate: 0, price: 0 }]);
   };
 
   const removeItem = (index: number) => {
@@ -51,9 +106,18 @@ const QuotationCreate = () => {
     setItems(newItems.map((item, i) => ({ ...item, sl_no: i + 1 })));
   };
 
-  const updateItem = (index: number, field: keyof QuotationItem, value: any) => {
+  const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
     const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
+    const item = { ...newItems[index], [field]: value };
+
+    // Auto-calculate Amount (price) if Quantity or Rate changes
+    if (field === "quantity" || field === "rate") {
+        const qty = field === "quantity" ? parseFloat(value) || 0 : item.quantity;
+        const rate = field === "rate" ? parseFloat(value) || 0 : item.rate;
+        item.price = qty * rate;
+    }
+
+    newItems[index] = item;
     setItems(newItems);
   };
 
@@ -72,30 +136,30 @@ const QuotationCreate = () => {
     setIsSubmitting(true);
     const form = e.target as HTMLFormElement;
     
-    // Construct Payload matching Django Serializer
     const payload = {
-        quotation_id: (form.elements.namedItem("quotationId") as HTMLInputElement).value,
+        invoice_id: (form.elements.namedItem("invoiceId") as HTMLInputElement).value,
         customer: selectedCustomerId,
         date: (form.elements.namedItem("date") as HTMLInputElement).value,
+        status: "pending", 
+        final_amount: total,
         gst_applied: gstApplied,
         gst_rate: gstApplied ? gstRate : 0,
         notes: (form.elements.namedItem("notes") as HTMLTextAreaElement).value,
-        items: items // This nested array matches the backend Serializer logic
+        items: items 
     };
 
     try {
-        await api.post("/api/quotations/", payload);
-        toast.success("Quotation created successfully!");
-        navigate("/quotations");
+        await api.post("/api/invoices/", payload);
+        toast.success("Invoice created successfully!");
+        navigate("/invoices");
     } catch (error) {
         console.error(error);
-        toast.error("Failed to create quotation.");
+        toast.error("Failed to create invoice.");
     } finally {
         setIsSubmitting(false);
     }
   };
 
-  // Helper to fill address/phone when customer is selected
   const selectedCustomer = customers.find(c => c.id.toString() === selectedCustomerId);
 
   return (
@@ -103,15 +167,45 @@ const QuotationCreate = () => {
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Create Quotation</h1>
-            <p className="text-muted-foreground mt-1">Generate a new quotation</p>
+            <h1 className="text-3xl font-bold text-foreground">Create Invoice</h1>
+            <p className="text-muted-foreground mt-1">Generate a new invoice</p>
           </div>
-          <Button variant="outline" onClick={() => navigate("/quotations")}>
-            Back to Quotations
+          <Button variant="outline" onClick={() => navigate("/invoices")}>
+            Back to Invoices
           </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* QUOTATION SELECTOR */}
+          <Card className="bg-muted/50 border-dashed">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Copy details from Quotation (Optional)
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="flex gap-4 items-end">
+                    <div className="w-full max-w-md">
+                        <Label className="mb-2 block text-xs">Select Quotation</Label>
+                        <Select value={selectedQuotationId} onValueChange={handleQuotationSelect}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Choose a quotation to autofill..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {quotations.map(q => (
+                                    <SelectItem key={q.id} value={q.id.toString()}>
+                                        {q.quotation_id} - {q.customer_name} (₹{q.total_amount})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Customer Information</CardTitle>
@@ -119,11 +213,11 @@ const QuotationCreate = () => {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="quotationId">Quotation ID *</Label>
+                  <Label htmlFor="invoiceId">Invoice ID *</Label>
                   <Input
-                    id="quotationId"
-                    name="quotationId"
-                    defaultValue={`QUO-${Date.now().toString().slice(-6)}`}
+                    id="invoiceId"
+                    name="invoiceId"
+                    defaultValue={`INV-${Date.now().toString().slice(-6)}`}
                     required
                   />
                 </div>
@@ -143,7 +237,6 @@ const QuotationCreate = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                    {/* Read only info for visual confirmation */}
                   <Label>Phone Number</Label>
                   <Input value={selectedCustomer?.phone_number || ""} disabled placeholder="Auto-filled" />
                 </div>
@@ -172,9 +265,9 @@ const QuotationCreate = () => {
               <div className="space-y-4">
                 {items.map((item, index) => (
                   <div key={index} className="flex gap-4 items-end">
-                    <div className="w-16">
-                      <Label>Sl No.</Label>
-                      <Input value={item.sl_no} disabled />
+                    <div className="w-12">
+                      <Label>Sl.</Label>
+                      <Input value={item.sl_no} disabled className="text-center" />
                     </div>
                     <div className="flex-1">
                       <Label>Description *</Label>
@@ -184,13 +277,32 @@ const QuotationCreate = () => {
                         required
                       />
                     </div>
+                    <div className="w-24">
+                        <Label>Qty *</Label>
+                        <Input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, "quantity", e.target.value)}
+                            required
+                        />
+                    </div>
                     <div className="w-32">
-                      <Label>Price (₹) *</Label>
+                        <Label>Rate (₹) *</Label>
+                        <Input
+                            type="number"
+                            value={item.rate}
+                            onChange={(e) => updateItem(index, "rate", e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="w-32">
+                      <Label>Amount (₹)</Label>
                       <Input
                         type="number"
                         value={item.price}
-                        onChange={(e) => updateItem(index, "price", parseFloat(e.target.value) || 0)}
-                        required
+                        readOnly
+                        className="bg-muted"
                       />
                     </div>
                     {items.length > 1 && (
@@ -199,7 +311,7 @@ const QuotationCreate = () => {
                         variant="ghost"
                         size="icon"
                         onClick={() => removeItem(index)}
-                        className="text-destructive"
+                        className="text-destructive mb-0.5"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -256,14 +368,14 @@ const QuotationCreate = () => {
           <Card>
             <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
             <CardContent>
-              <Textarea id="notes" name="notes" placeholder="Additional notes..." rows={4} />
+              <Textarea id="notes" name="notes" placeholder="Payment terms, bank details..." rows={4} />
             </CardContent>
           </Card>
 
           <div className="flex gap-3 justify-end">
             <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? <Loader2 className="animate-spin mr-2" /> : null}
-                Create Quotation
+                Create Invoice
             </Button>
           </div>
         </form>
@@ -272,4 +384,4 @@ const QuotationCreate = () => {
   );
 };
 
-export default QuotationCreate;
+export default InvoiceCreate;

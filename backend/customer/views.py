@@ -1,10 +1,10 @@
-from rest_framework import generics
-from rest_framework.permissions import AllowAny
+from rest_framework import viewsets, filters
 from .models import CustomerModel
 from .serializers import CustomerSerializer
 
 
-class CustomerViewset(generics.ListCreateAPIView):
+class CustomerViewset(viewsets.ModelViewSet):
     queryset = CustomerModel.objects.all()
-    permission_classes = [AllowAny]
     serializer_class = CustomerSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'phone_number', 'gstin', 'company_name']

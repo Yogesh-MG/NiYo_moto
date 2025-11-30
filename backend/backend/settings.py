@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'customer.apps.CustomerConfig',
+    'invoice.apps.InvoiceConfig',
     #'hospitals.apps.HospitalsConfig', remove this
 ]
 
@@ -198,3 +199,11 @@ SIMPLE_JWT = {
 
     'JTI_CLAIM': 'jti',
 }
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = config('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(config('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True 
+EMAIL_HOST_USER = config('EMAIL_HOST_USER') # e.g., 'yourcompany@gmail.com'
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD') # App Password (not login password)
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER

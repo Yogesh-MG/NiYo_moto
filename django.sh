@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "Starting Django commands..."
-source venv/Scripts/activate
+source env/Scripts/activate
 cd backend
 
 printf "\033[33mDo you want to run server(run)\nTo make migrations(make)\nTo apply migrations(migrate)\nto generate static files(static)\nto create new app(app) \033[0m"
@@ -14,6 +14,8 @@ elif [ "$django_command" = "migrate" ]; then
     python manage.py migrate
 elif [ "$django_command" = "static" ]; then
     python manage.py collectstatic
+elif [ "$django_command" = "user" ]; then
+    python manage.py createsuperuser
 elif [ "$django_command" = "app" ]; then
     printf "\033[33mEnter the name of the new app: \033[0m"
     read -r app_name
